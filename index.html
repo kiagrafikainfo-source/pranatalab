@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f8f9fa">
+    <title>Simple Inventory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400..800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-yEPZ7jP9S0QKiUQ0m3jjsO4ProIW7wvR9gXkI7JOGa2XVsw53Yke2bsdkBbjmmiX" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body class="bg-body-tertiary">
+    <div id="app">
+        <div v-if="authLoading" class="d-flex min-vh-100 align-items-center justify-content-center">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="text-secondary mb-0">Memuat Simple Inventory...</p>
+            </div>
+        </div>
+
+        <main v-else-if="!currentUser" class="d-flex min-vh-100 flex-column align-items-center justify-content-center p-4">
+            <section class="card border-0 shadow-sm" style="width: min(100%, 440px)">
+                <div class="card-body p-4 p-sm-5">
+                    <a class="d-inline-flex align-items-center gap-2 text-decoration-none text-dark fw-bold fs-5 mb-4" href="#" aria-label="Simple Inventory">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-3 bg-primary text-white" style="width: 36px; height: 36px">
+                            <i class="bi bi-box-seam"></i>
+                        </span>
+                        <span>Simple <span class="fw-normal text-secondary">Inventory</span></span>
+                    </a>
+                    <div class="mb-4">
+                        <p class="text-primary text-uppercase small fw-semibold mb-2">Manajemen stok</p>
+                        <h1 class="h3 mb-2">{{ authMode === 'login' ? 'Selamat datang kembali' : 'Buat akun baru' }}</h1>
+                        <p class="text-secondary mb-0">
+                            {{ authMode === 'login' ? 'Masuk untuk mengelola inventaris Anda.' : 'Daftar untuk mulai menggunakan Simple Inventory.' }}
+                        </p>
+                    </div>
+
+                    <div v-if="!isConfigured" class="alert alert-warning small" role="alert">
+                        Hubungkan Supabase terlebih dahulu. Isi <code>SUPABASE_URL</code> dan
+                        <code>SUPABASE_ANON_KEY</code> di bagian atas <code>config/supabase.js</code>.
+                    </div>
+                    <div v-if="authError" class="alert alert-danger" role="alert">{{ authError }}</div>
+                    <div v-if="authNotice" class="alert alert-success" role="status">{{ authNotice }}</div>
+
+                    <form @submit.prevent="submitAuth">
+                        <div v-if="authMode === 'register'" class="mb-3">
+                            <label for="fullName" class="form-label">Nama lengkap</label>
+                            <input id="fullName" v-model.trim="authForm.fullName" class="form-control" type="text"
+                                   autocomplete="name" placeholder="Nama Anda" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input id="email" v-model.trim="authForm.email" class="form-control" type="email"
+                                   autocomplete="email" placeholder="nama@email.com" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="password" class="form-label">Password</label>
+                            <input id="password" v-model="authForm.password" class="form-control" type="password"
+                                   :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
+                                   placeholder="Minimal 6 karakter" minlength="6" required>
+                        </div>
+                        <button class="btn btn-primary w-100" type="submit" :disabled="authSubmitting || !isConfigured">
+                            <span v-if="authSubmitting" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            {{ authSubmitting ? 'Memproses...' : (authMode === 'login' ? 'Masuk' : 'Daftar') }}
+                        </button>
+                    </form>
+
+                    <p class="text-center text-secondary mt-4 mb-0">
+                        {{ authMode === 'login' ? 'Belum punya akun?' : 'Sudah punya akun?' }}
+                        <button class="btn btn-link p-0 align-baseline" type="button" @click="toggleAuthMode">
+                            {{ authMode === 'login' ? 'Daftar sekarang' : 'Masuk' }}
+                        </button>
+                    </p>
+                </div>
+            </section>
+            <p class="text-secondary small mt-4 mb-0">Simple Inventory · Kelola stok dengan lebih mudah</p>
+        </main>
+
+        <div v-else class="d-flex min-vh-100">
+            <aside id="app-sidebar" class="offcanvas-lg offcanvas-start" tabindex="-1" aria-labelledby="sidebarLabel">
+                <div class="offcanvas-header">
+                    <h2 class="offcanvas-title h5 mb-0" id="sidebarLabel">Simple Inventory</h2>
+                    <button class="btn-close" type="button" data-bs-dismiss="offcanvas" data-bs-target="#app-sidebar" aria-label="Tutup menu"></button>
+                </div>
+                <div class="offcanvas-body">
+                    <a class="d-none d-lg-inline-flex align-items-center gap-2 text-decoration-none text-dark fw-bold mb-4" href="#"
+                       @click.prevent="activeSection = 'dashboard'">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-3 bg-primary text-white" style="width: 36px; height: 36px">
+                            <i class="bi bi-box-seam"></i>
+                        </span>
+                        <span>Simple <span class="fw-normal text-secondary">Inventory</span></span>
+                    </a>
+                    <div class="text-uppercase text-secondary small fw-semibold mb-2">Menu utama</div>
+                    <nav class="nav nav-pills flex-column gap-1" aria-label="Navigasi utama">
+                        <button class="nav-link text-start" :class="{ active: activeSection === 'dashboard' }" type="button"
+                                @click="activeSection = 'dashboard'; closeSidebar()">
+                            <i class="bi bi-grid-1x2 me-2"></i>Dashboard
+                        </button>
+                        <button class="nav-link text-start" :class="{ active: activeSection === 'inventory' }" type="button"
+                                @click="activeSection = 'inventory'; closeSidebar()">
+                            <i class="bi bi-boxes me-2"></i>Inventaris
+                        </button>
+                    </nav>
+                    <div class="mt-auto pt-4">
+                        <div class="alert alert-light border small d-flex gap-2" role="note">
+                            <i class="bi bi-lightbulb"></i>
+                            <p class="mb-0">Pantau stok secara rutin agar kebutuhan barang selalu terpenuhi.</p>
+                        </div>
+                        <div class="text-secondary small">Simple Inventory <span class="fw-semibold">v1.0</span></div>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="d-flex flex-column flex-grow-1 min-vh-100" style="min-width: 0">
+                <header class="navbar navbar-expand bg-white border-bottom px-3">
+                    <button class="btn btn-outline-secondary d-lg-none me-2" type="button" aria-label="Buka menu"
+                            data-bs-toggle="offcanvas" data-bs-target="#app-sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <nav aria-label="Jejak halaman" class="me-auto">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item">Workspace</li>
+                            <li class="breadcrumb-item active" aria-current="page">{{ activeSection === 'dashboard' ? 'Dashboard' : 'Inventaris' }}</li>
+                        </ol>
+                    </nav>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center fw-semibold"
+                              style="width: 36px; height: 36px; font-size: 13px">{{ userInitials }}</span>
+                        <div class="d-none d-sm-block lh-sm">
+                            <div class="fw-semibold small">{{ profile?.full_name || currentUser.email }}</div>
+                            <div class="text-secondary small">{{ isAdmin ? 'Administrator' : 'User' }}</div>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" aria-label="Keluar" title="Keluar" @click="logout">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </div>
+                </header>
+
+                <main class="flex-grow-1">
+                    <div class="container-xl py-3 py-md-4">
+                    <div v-if="pageError" class="alert alert-danger d-flex align-items-center justify-content-between" role="alert">
+                        <span><i class="bi bi-exclamation-circle me-2"></i>{{ pageError }}</span>
+                        <button class="btn-close" type="button" aria-label="Tutup" @click="pageError = ''"></button>
+                    </div>
+
+                    <section v-if="profileError" class="card border-0 shadow-sm text-center">
+                        <div class="card-body py-5">
+                            <div class="text-primary fs-1 mb-2"><i class="bi bi-person-exclamation"></i></div>
+                            <h2 class="h4">Profil belum tersedia</h2>
+                            <p class="text-secondary">{{ profileError }}</p>
+                            <p class="text-secondary small mb-0">Pastikan trigger pembuatan profil sudah dibuat sesuai petunjuk SQL.</p>
+                        </div>
+                    </section>
+
+                    <template v-else>
+                        <section v-if="activeSection === 'dashboard'" class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+                            <div>
+                                <p class="text-primary text-uppercase small fw-semibold mb-2">Ringkasan inventaris</p>
+                                <h1 class="h3 mb-1">Dashboard</h1>
+                                <p class="text-secondary mb-0">Pantau kondisi inventaris Anda hari ini.</p>
+                            </div>
+                            <button v-if="isAdmin" class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2"
+                                    type="button" @click="openCreateModal">
+                                <i class="bi bi-plus-lg"></i> Tambah barang
+                            </button>
+                        </section>
+                        <section v-else class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+                            <div>
+                                <p class="text-primary text-uppercase small fw-semibold mb-2">Data barang</p>
+                                <h1 class="h3 mb-1">Inventaris</h1>
+                                <p class="text-secondary mb-0">Cari, filter, dan kelola barang inventaris.</p>
+                            </div>
+                            <button v-if="isAdmin" class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2"
+                                    type="button" @click="openCreateModal">
+                                <i class="bi bi-plus-lg"></i> Tambah barang
+                            </button>
+                        </section>
+
+                        <section v-if="activeSection === 'dashboard'" class="row g-3 mb-4">
+                            <article class="col-6 col-xl-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <p class="text-secondary small mb-0">Total Barang</p>
+                                            <span class="rounded-3 bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px"><i class="bi bi-box-seam"></i></span>
+                                        </div>
+                                        <h2 class="h2 mb-0 mt-2">{{ totalItems }}</h2>
+                                        <span class="text-secondary small">jenis barang</span>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="col-6 col-xl-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <p class="text-secondary small mb-0">Total Kategori</p>
+                                            <span class="rounded-3 bg-info-subtle text-info-emphasis d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px"><i class="bi bi-tags"></i></span>
+                                        </div>
+                                        <h2 class="h2 mb-0 mt-2">{{ totalCategories }}</h2>
+                                        <span class="text-secondary small">kategori barang</span>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="col-6 col-xl-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <p class="text-secondary small mb-0">Total Stok</p>
+                                            <span class="rounded-3 bg-success-subtle text-success d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px"><i class="bi bi-stack"></i></span>
+                                        </div>
+                                        <h2 class="h2 mb-0 mt-2">{{ totalStock }}</h2>
+                                        <span class="text-secondary small">unit tersedia</span>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="col-6 col-xl-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <p class="text-secondary small mb-0">Stok Menipis</p>
+                                            <span class="rounded-3 bg-warning-subtle text-warning-emphasis d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px"><i class="bi bi-exclamation-triangle"></i></span>
+                                        </div>
+                                        <h2 class="h2 mb-0 mt-2">{{ lowStockItems }}</h2>
+                                        <span class="text-secondary small">stok 5 atau kurang</span>
+                                    </div>
+                                </div>
+                            </article>
+                        </section>
+
+                        <section class="card border-0 shadow-sm">
+                            <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
+                                <div>
+                                    <h2 class="h5 mb-1">{{ activeSection === 'dashboard' ? 'Daftar Inventaris' : 'Semua Barang' }}</h2>
+                                    <p class="text-secondary small mb-0">Terdapat {{ filteredItems.length }} barang</p>
+                                </div>
+                                <button v-if="isAdmin" class="btn btn-primary d-md-none" type="button"
+                                        aria-label="Tambah barang" @click="openCreateModal">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-12 col-md">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                            <input v-model.trim="searchQuery" type="search" class="form-control"
+                                                   placeholder="Cari nama barang..." aria-label="Cari nama barang">
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-4 col-lg-3">
+                                        <select v-model="selectedCategory" class="form-select" aria-label="Filter kategori">
+                                            <option value="">Semua kategori</option>
+                                            <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div v-if="itemsLoading" class="text-center text-secondary py-5">
+                                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                    <span>Memuat data barang...</span>
+                                </div>
+                                <div v-else-if="itemsError" class="text-center text-danger py-5">
+                                    <i class="bi bi-exclamation-circle fs-3 d-block mb-2"></i>
+                                    <p>{{ itemsError }}</p>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" @click="loadItems">Coba lagi</button>
+                                </div>
+                                <div v-else-if="filteredItems.length === 0" class="text-center text-secondary py-5">
+                                    <i class="bi bi-inboxes fs-3 d-block mb-2"></i>
+                                    <p>{{ items.length === 0 ? 'Belum ada data barang.' : 'Barang tidak ditemukan.' }}</p>
+                                    <button v-if="isAdmin && items.length === 0" class="btn btn-sm btn-primary"
+                                            type="button" @click="openCreateModal">Tambah barang pertama</button>
+                                </div>
+                                <div v-else class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">ID</th>
+                                                <th scope="col">Nama Barang</th>
+                                                <th scope="col">Kategori</th>
+                                                <th scope="col">Stok</th>
+                                                <th scope="col">Satuan</th>
+                                                <th scope="col">Tanggal Ditambahkan</th>
+                                                <th v-if="isAdmin" scope="col" class="text-end">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="item in filteredItems" :key="item.id">
+                                                <td><span class="font-monospace text-secondary small" :title="item.id">#{{ item.id.slice(0, 8) }}</span></td>
+                                                <td><strong>{{ item.name }}</strong></td>
+                                                <td><span class="badge text-bg-light border">{{ item.category }}</span></td>
+                                                <td><span :class="Number(item.stock) <= 5 ? 'text-danger fw-semibold' : ''">{{ item.stock }}</span></td>
+                                                <td>{{ item.unit }}</td>
+                                                <td>{{ formatDate(item.created_at) }}</td>
+                                                <td v-if="isAdmin" class="text-end">
+                                                    <div class="d-inline-flex gap-1">
+                                                        <button class="btn btn-sm btn-outline-primary" type="button" title="Edit barang"
+                                                                :aria-label="'Edit ' + item.name" @click="openEditModal(item)">
+                                                            <i class="bi bi-pencil-square"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" type="button" title="Hapus barang"
+                                                                :aria-label="'Hapus ' + item.name" :disabled="deletingId === item.id"
+                                                                @click="deleteItem(item)">
+                                                            <span v-if="deletingId === item.id" class="spinner-border spinner-border-sm"></span>
+                                                            <i v-else class="bi bi-trash3"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-white d-flex flex-wrap justify-content-between gap-2 text-secondary small">
+                                <span>Menampilkan {{ filteredItems.length }} dari {{ items.length }} barang</span>
+                                <span v-if="!isAdmin"><i class="bi bi-eye me-1"></i>Mode hanya lihat</span>
+                            </div>
+                        </section>
+                    </template>
+                    </div>
+                </main>
+                <footer class="border-top bg-white text-secondary small px-4 py-3">© {{ currentYear }} Simple Inventory · Kelola stok dengan mudah</footer>
+            </div>
+        </div>
+
+        <template v-if="showItemModal">
+            <div class="modal-backdrop fade show"></div>
+            <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle" @click.self="closeItemModal">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" @click.stop>
+                        <div class="modal-header">
+                            <div>
+                                <p class="text-primary text-uppercase small fw-semibold mb-1">{{ editingItem ? 'Perbarui data' : 'Data baru' }}</p>
+                                <h2 class="modal-title h5" id="itemModalTitle">{{ editingItem ? 'Edit barang' : 'Tambah barang' }}</h2>
+                            </div>
+                            <button class="btn-close" type="button" aria-label="Tutup" @click="closeItemModal"></button>
+                        </div>
+                        <form @submit.prevent="saveItem">
+                            <div class="modal-body">
+                                <div v-if="formError" class="alert alert-danger" role="alert">{{ formError }}</div>
+                                <div class="mb-3">
+                                    <label for="itemName" class="form-label">Nama barang</label>
+                                    <input id="itemName" v-model.trim="itemForm.name" class="form-control" type="text"
+                                           placeholder="Contoh: Kertas A4" maxlength="120" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="itemCategory" class="form-label">Kategori</label>
+                                    <input id="itemCategory" v-model.trim="itemForm.category" class="form-control" type="text"
+                                           placeholder="Contoh: ATK" maxlength="80" required>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-7">
+                                        <label for="itemStock" class="form-label">Stok</label>
+                                        <input id="itemStock" v-model.number="itemForm.stock" class="form-control" type="number"
+                                               min="0" step="1" placeholder="0" required>
+                                    </div>
+                                    <div class="col-5">
+                                        <label for="itemUnit" class="form-label">Satuan</label>
+                                        <input id="itemUnit" v-model.trim="itemForm.unit" class="form-control" type="text"
+                                               placeholder="pcs" maxlength="30" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-light" type="button" :disabled="savingItem" @click="closeItemModal">Batal</button>
+                                <button class="btn btn-primary" type="submit" :disabled="savingItem">
+                                    <span v-if="savingItem" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    {{ savingItem ? 'Menyimpan...' : 'Simpan barang' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/js/bootstrap.bundle.min.js" integrity="sha384-WyOxWvTyr1QaMPfiPJSv76iReVthorl5uWlFtZPyK0IEB0hGzo9y5Bp9mYanr8Bu" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>
